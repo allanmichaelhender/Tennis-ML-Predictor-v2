@@ -6,70 +6,99 @@ from sqlalchemy.dialects.postgresql import insert
 from app.database.session import async_session
 from app.models.match import Match
 
+
 async def ingest_csv_file(file_path: str):
     """Processes a single year of ATP data."""
     print(f"🔄 Processing {os.path.basename(file_path)}...")
-    
+
+    chunk_size = 1000
+
     # Load CSV with String IDs to prevent float scientific notation
-    df = pd.read_csv(file_path, low_memory=False, dtype={'winner_id': str, 'loser_id': str})
-    df = df.where(pd.notnull(df), None)
+    reader = pd.read_csv(
+        file_path,
+        low_memory=False,
+        chunksize=chunk_size,
+        dtype={"winner_id": str, "loser_id": str},
+    )
 
+    def clean_int(val):
+        if pd.isna(val) or val is None:
+            return None
+        try:
+            return int(float(val))
+        except:
+            return None
+
+    total = 0
     async with async_session() as session:
-        matches_data = []
-        for _, row in df.iterrows():
-            try:
-                # Convert YYYYMMDD to datetime
-                date_val = str(row['tourney_date']).split('.')[0] # Handle floats
-                match_date = datetime.strptime(date_val, '%Y%m%d')
+        for df_chunk in reader:
+            # 2. Vectorized cleaning for the chunk
+            df_chunk = df_chunk.where(pd.notnull(df_chunk), None)
 
-                matches_data.append({
-                    "tourney_id": str(row['tourney_id']),
-                    "tourney_name": str(row['tourney_name']),
-                    "surface": str(row['surface']),
-                    "tourney_level": str(row['tourney_level']),
-                    "tourney_date": match_date,
-                    "winner_id": row['winner_id'],
-                    "loser_id": row['loser_id'],
-                    "score": str(row['score']),
-                    "best_of": int(row['best_of']) if row['best_of'] else 3,
-                    "round": str(row['round']),
-                    "w_ace": row['w_ace'],
-                    "w_df": row['w_df'],
-                    "w_svpt": row['w_svpt'],
-                    "w_1stIn": row['w_1stIn'],
-                    "w_1stWon": row['w_1stWon'],
-                    "w_2ndWon": row['w_2ndWon'],
-                    "w_bpSaved": row['w_bpSaved'],
-                    "w_bpFaced": row['w_bpFaced'],
-                    "l_ace": row['l_ace'],
-                    "l_df": row['l_df'],
-                    "l_svpt": row['l_svpt'],
-                    "l_1stIn": row['l_1stIn'],
-                    "l_1stWon": row['l_1stWon'],
-                    "l_2ndWon": row['l_2ndWon'],
-                    "l_bpSaved": row['l_bpSaved'],
-                    "l_bpFaced": row['l_bpFaced'],
-                    "minutes": row['minutes']
-                })
-            except Exception as e:
-                continue # Skip malformed rows
+            # 3. List Comprehension for the 1,000-row "bite"
+            matches_data = [
+                {
+                    "tourney_id": str(row["tourney_id"]),
+                    "tourney_name": str(row["tourney_name"]),
+                    "surface": str(row["surface"]),
+                    "tourney_level": str(row["tourney_level"]),
+                    "tourney_date": datetime.strptime(
+                        str(int(float(row["tourney_date"]))), "%Y%m%d"
+                    ),
+                    "winner_id": str(row["winner_id"]),
+                    "loser_id": str(row["winner_id"]),
+                    "score": str(row["score"]),
+                    "best_of": clean_int(row.get("best_of")) or 3,
+                    "round": str(row["round"]),
+                    "minutes": clean_int(row.get("minutes")),
+                    # Winner Stats
+                    "w_ace": clean_int(row.get("w_ace")),
+                    "w_df": clean_int(row.get("w_df")),
+                    "w_svpt": clean_int(row.get("w_svpt")),
+                    "w_1stIn": clean_int(row.get("w_1stIn")),
+                    "w_1stWon": clean_int(row.get("w_1stWon")),
+                    "w_2ndWon": clean_int(row.get("w_2ndWon")),
+                    "w_bpSaved": clean_int(row.get("w_bpSaved")),
+                    "w_bpFaced": clean_int(row.get("w_bpFaced")),
+                    # Loser Stats
+                    "l_ace": clean_int(row.get("l_ace")),
+                    "l_df": clean_int(row.get("l_df")),
+                    "l_svpt": clean_int(row.get("l_svpt")),
+                    "l_1stIn": clean_int(row.get("l_1stIn")),
+                    "l_1stWon": clean_int(row.get("l_1stWon")),
+                    "l_2ndWon": clean_int(row.get("l_2ndWon")),
+                    "l_bpSaved": clean_int(row.get("l_bpSaved")),
+                    "l_bpFaced": clean_int(row.get("l_bpFaced")),
+                }
+                for _, row in df_chunk.iterrows()
+                if not pd.isna(row.get("winner_id"))  # Basic validation
+            ]
 
-        if matches_data:
-            stmt = insert(Match).values(matches_data).on_conflict_do_nothing()
-            await session.execute(stmt)
-            await session.commit()
+            if matches_data:
+                # 4. Bulk Upsert (Conflict is unlikely for matches, but safe to use)
+                stmt = insert(Match).values(matches_data).on_conflict_do_nothing()
+                await session.execute(stmt)
+                await session.commit()
+
+                total += len(matches_data)
+                print(f"📦 {file_path}: {total} matches synced...")
+
+    print(f"✅ Ingestion Complete for {file_path}")
+
+
 
 async def main():
     DATA_DIR = "/project/app/tml-data"
     # Filter for files like 2010.csv, 2011.csv ... 2026.csv
     years = [f"{year}.csv" for year in range(2010, 2027)]
-    
+
     for filename in years:
         file_path = os.path.join(DATA_DIR, filename)
         if os.path.exists(file_path):
             await ingest_csv_file(file_path)
-    
+
     print("🏁 Bulk Ingestion Complete.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

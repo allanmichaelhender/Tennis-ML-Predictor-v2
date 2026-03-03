@@ -9,14 +9,22 @@ from datetime import date
 async def ingest_players_csv(file_path: str):
     # 1. Use 'chunksize' to read the file in batches
 
-    def clean_int(val):
-        if pd.isna(val) or val is None:
+    def clean_int(val, column_type=None):
+        if pd.isna(val) or val is None or str(val).strip() == "":
             return None
         try:
-            return int(float(val))
+            # 1. Force to int
+            num = int(float(val))
+
+            # 2. SANITY CHECK: If this is Weight/Height, it shouldn't be 8 digits long
+            if column_type in ["weight", "height"]:
+                if num > 1000:  # No player is 1000cm tall or 1000kg
+                    return None
+
+            return num
         except (ValueError, TypeError):
             return None
-        
+
     def parse_atp_date(val):
         if pd.isna(val) or val is None or str(val).strip() == "":
             return None
@@ -62,8 +70,8 @@ async def ingest_players_csv(file_path: str):
                     "birthdate": parse_atp_date(row.get("birthdate")),
                     "atpname": str(row.get("atpname")) if row.get("atpname") else None,
                     "hand": str(row["hand"]).upper() if row.get("hand") else "U",
-                    "height": clean_int(row.get("height")),
-                    "weight": clean_int(row.get("weight")),
+                    "height": clean_int(row.get("height"), "height"),
+                    "weight": clean_int(row.get("weight"), "weight"),
                     "ioc": str(row["ioc"])[:3].upper() if row.get("ioc") else None,
                     "backhand": str(row.get("backhand", "Unknown")),
                 }
@@ -77,8 +85,11 @@ async def ingest_players_csv(file_path: str):
                 set_={
                     "player": stmt.excluded.player,
                     "height": stmt.excluded.height,
-                    "hand": stmt.excluded.hand,
+                    "weight": stmt.excluded.weight,
                     "birthdate": stmt.excluded.birthdate,
+                    "hand": stmt.excluded.hand,
+                    "ioc": stmt.excluded.ioc,
+                    "atpname": stmt.excluded.atpname,
                 },
             )
 
