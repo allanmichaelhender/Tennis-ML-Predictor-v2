@@ -5,8 +5,56 @@ from datetime import datetime
 from sqlalchemy.dialects.postgresql import insert
 from app.database.session import async_session
 from app.models.match import Match
-from app.models.player import Player 
+from app.models.player import Player
 from sqlalchemy import select
+import re
+
+
+def parse_atp_score(score_str):
+    if not score_str or pd.isna(score_str):
+        return True, 0, 0, 0.0, 0, 0
+
+    s = str(score_str).strip()
+
+    # 1. is_retirement check
+    # Check if starts with a number (e.g., '6-4') vs 'W/O' or 'RET'
+    is_retirement = "RET" in s.upper() or not re.match(r"^\d", s) or "W/O" in s.upper()
+
+    # 2. Extract Tiebreak Stats
+    # Tiebreaks in Sackmann/ATP are usually denoted by (5) or (10)
+    # We also check for the 7-6 or 6-7 game score
+    sets = re.sub(r"\(.*?\)", "", s).replace("RET", "").replace("W/O", "").split()
+
+    w_games, l_games, tb_played, tb_won = 0, 0, 0, 0
+
+    for set_score in sets:
+        try:
+            w, l = map(int, set_score.split("-"))
+            w_games += w
+            l_games += l
+
+            # Identify Tiebreaks (Professional Standard is 7-6 or 6-7)
+            if (w == 7 and l == 6) or (w == 6 and l == 7):
+                tb_played += 1
+                if w == 7:
+                    tb_won += 1
+        except:
+            continue
+
+    total_games = w_games + l_games
+    games_diff = w_games - l_games
+    win_pct = round(w_games / total_games, 3) if total_games > 0 else 0.0
+
+    return is_retirement, total_games, games_diff, win_pct, tb_played, tb_won
+
+
+def clean_int(val):
+    if pd.isna(val) or val is None:
+        return None
+    try:
+        return int(float(val))
+    except:
+        return None
 
 
 async def ingest_csv_file(file_path: str):
@@ -22,27 +70,15 @@ async def ingest_csv_file(file_path: str):
         dtype={"winner_id": str, "loser_id": str},
     )
 
-
-
-    def clean_int(val):
-        if pd.isna(val) or val is None:
-            return None
-        try:
-            return int(float(val))
-        except:
-            return None
-
     total = 0
     async with async_session() as session:
         result = await session.execute(select(Player.id))
         valid_ids = set(result.scalars().all())
 
-
-
-
         for df_chunk in reader:
             # 2. Vectorized cleaning for the chunk
             df_chunk = df_chunk.where(pd.notnull(df_chunk), None)
+
 
             # 3. List Comprehension for the 1,000-row "bite"
             matches_data = [
@@ -54,8 +90,9 @@ async def ingest_csv_file(file_path: str):
                     "tourney_date": datetime.strptime(
                         str(int(float(row["tourney_date"]))), "%Y%m%d"
                     ),
+                    "match_num": clean_int(row["match_num"]),
                     "winner_id": str(row["winner_id"]),
-                    "loser_id": str(row["winner_id"]),
+                    "loser_id": str(row["loser_id"]),
                     "score": str(row["score"]),
                     "best_of": clean_int(row.get("best_of")) or 3,
                     "round": str(row["round"]),
@@ -72,7 +109,6 @@ async def ingest_csv_file(file_path: str):
                     "w_bpFaced": clean_int(row.get("w_bpFaced")),
                     "winner_rank": clean_int(row.get("winner_rank")),
                     "winner_ranking_points": clean_int(row.get("winner_rank_points")),
-
                     # Loser Stats
                     "l_ace": clean_int(row.get("l_ace")),
                     "l_df": clean_int(row.get("l_df")),
@@ -85,9 +121,18 @@ async def ingest_csv_file(file_path: str):
                     "l_bpFaced": clean_int(row.get("l_bpFaced")),
                     "loser_rank": clean_int(row.get("loser_rank")),
                     "loser_ranking_points": clean_int(row.get("loser_rank_points")),
+
+                    # Accessing the unpacked tuple results
+                    "is_retirement": res[0],
+                    "total_games": res[1],
+                    "games_diff": res[2],
+                    "game_win_percentage": res[3],
+                    "tiebreaks_played": res[4],
+                    "tiebreaks_won": res[5],
                 }
                 for _, row in df_chunk.iterrows()
-                if str(row["winner_id"]) in valid_ids 
+                for res in [parse_atp_score(row.get("score"))]
+                if str(row["winner_id"]) in valid_ids
                 and str(row["loser_id"]) in valid_ids
             ]
 
@@ -101,7 +146,6 @@ async def ingest_csv_file(file_path: str):
                 print(f"📦 {file_path}: {total} matches synced...")
 
     print(f"✅ Ingestion Complete for {file_path}")
-
 
 
 async def main():
