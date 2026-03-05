@@ -27,6 +27,7 @@ class TennisDataProcessor:
                 w_elo_before, l_elo_before,
                 w_surface_elo_before, l_surface_elo_before,
                 w_days_off, l_days_off,
+                w_surface_days_off, l_surface_days_off,
                 w_rolling_match_win_pct, l_rolling_match_win_pct,
                 w_rolling_game_win_pct, l_rolling_game_win_pct,
                 w_rolling_serve_won_pct, w_rolling_ace_per_game,

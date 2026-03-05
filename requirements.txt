@@ -22,3 +22,7 @@ torchvision==0.17.0
 
 # Storage
 pyarrow==15.0.0
+
+# Security & Utils
+slowapi==0.1.9
+python-multipart==0.0.9

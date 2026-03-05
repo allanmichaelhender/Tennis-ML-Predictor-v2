@@ -17,6 +17,8 @@ class Match(Base):
 
     winner_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
     loser_id: Mapped[str] = mapped_column(ForeignKey("players.id"), index=True)
+    winner_name: Mapped[str | None] = mapped_column(String)
+    loser_name: Mapped[str | None] = mapped_column(String)
 
     score: Mapped[str] = mapped_column(String(100))
     best_of: Mapped[int] = mapped_column(Integer)
@@ -66,6 +68,10 @@ class Match(Base):
 
     w_days_off: Mapped[int | None] = mapped_column(Integer)
     l_days_off: Mapped[int | None] = mapped_column(Integer)
+
+    # Surface-specific timing (Days since last match on THIS surface)
+    w_surface_days_off: Mapped[int | None] = mapped_column(Integer)
+    l_surface_days_off: Mapped[int | None] = mapped_column(Integer)
 
     w_rolling_match_win_pct: Mapped[float | None] = mapped_column(Float)
     l_rolling_match_win_pct: Mapped[float | None] = mapped_column(Float)
