@@ -25,7 +25,6 @@ class ManualRequest(BaseModel):
 
 async def get_player_snapshot(session, player_id, surface):
     """Calculates 'Right Now' stats for a player."""
-    today = datetime.now().date()
     
     # Get all matches to calculate Rust and Fatigue
     stmt = select(Match).where(
@@ -42,9 +41,18 @@ async def get_player_snapshot(session, player_id, surface):
     is_w = (latest.winner_id == player_id)
 
     # Calculate Rust & Fatigue
-    days_off = (today - latest.tourney_date).days
+    today = pd.Timestamp.now().normalize() # Today at 00:00:00
+    
+    # ... query ...
+    
+
+    
+    # 3. Force the DB date to a Timestamp and subtract
+    days_off = (today - pd.Timestamp(latest.tourney_date).normalize()).days
+
+    # 4. Surface-specific (One-liner)
     last_on_surf = next((m for m in history if m.surface == surface), None)
-    surf_days_off = (today - last_on_surf.tourney_date).days if last_on_surf else 365
+    surf_days_off = (today - pd.Timestamp(last_on_surf.tourney_date).normalize()).days if last_on_surf else 365
     
     recent_14 = [m for m in history if (today - m.tourney_date).days <= 14]
     fatigue = sum((m.minutes or 90) for m in recent_14)

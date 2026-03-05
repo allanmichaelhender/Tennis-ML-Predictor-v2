@@ -99,3 +99,36 @@ class FeatureAssembler:
         final_vector = np.hstack([scaled_stats, p1_emb, p2_emb])
         
         return final_vector
+    
+    def assemble_manual(self, p1_id, p2_id, surface, stats_dict, flip=False):
+        """
+        Assembles a 61-feature vector from IDs and a dictionary of stats.
+        """
+        import torch
+        import numpy as np
+
+        # 1. Get Neural Style Vectors (Embeddings)
+        try:
+            # We use the LabelEncoder to get the 'Seat Number' for the NN
+            p1_idx = torch.tensor([self.player_le.transform([p1_id])[0]], dtype=torch.long)
+            p2_idx = torch.tensor([self.player_le.transform([p2_id])[0]], dtype=torch.long)
+            
+            with torch.no_grad():
+                p1_emb = self.encoder.player_embed(p1_idx).numpy()
+                p2_emb = self.encoder.player_embed(p2_idx).numpy()
+        except (ValueError, KeyError):
+            # If a player is too new and not in the Encoder, we use a Zero-vector
+            p1_emb = np.zeros((1, 16))
+            p2_emb = np.zeros((1, 16))
+
+        # 2. Scale the 24 Continuous Stats
+        # EXPECTED_FEATURES ensures the order is 100% correct for the Scaler
+        stats_df = pd.DataFrame([stats_dict])[self.scaler.feature_names_in_].infer_objects(copy=False).fillna(0)
+        scaled_stats = self.scaler.transform(stats_df)
+
+        # 3. Concatenate into the final 61-feature row
+        if flip:
+            # If flipping, we swap the stats AND the style vectors
+            return np.hstack([scaled_stats, p2_emb, p1_emb])
+        
+        return np.hstack([scaled_stats, p1_emb, p2_emb])

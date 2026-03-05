@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import players
+from app.api.endpoints import players, predict
 
 app = FastAPI(title="Tennis ML Predictor API")
 
@@ -16,6 +16,7 @@ app.add_middleware(
 # 2. REGISTER ROUTERS
 # This makes the endpoint: GET http://localhost:8000/api/v1/players/search
 app.include_router(players.router, prefix="/api/v1/players", tags=["players"])
+app.include_router(predict.router, prefix="/api/v1/predict", tags=["predict"])
 
 @app.get("/")
 async def root():
