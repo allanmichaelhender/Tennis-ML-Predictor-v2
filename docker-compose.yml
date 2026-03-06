@@ -37,6 +37,7 @@ services:
     container_name: tennis_api
     volumes:
       - .:/project
+      - /app/.venv
     ports:
       - "8000:8000"
     environment:
@@ -44,6 +45,7 @@ services:
       - PYTHONPATH=/project  # This ensures app.api.endpoints is found
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
     depends_on:
       - db
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
