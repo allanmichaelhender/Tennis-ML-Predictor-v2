@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from app.api.deps import get_api_key
 from app.database.session import async_session
 from app.schemas.predict import ManualPredictRequest, ManualPredictResponse
-from app.services.inference_service import inference_service
+from app.services.ml.inference_service import inference_service
 from sqlalchemy import select
 from app.models.player_state import PlayerState
 

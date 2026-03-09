@@ -29,3 +29,19 @@
 ├── Dockerfile                  # API container recipe
 ├── requirements.txt            # Python dependencies (2026 Power Stack)
 └── .env                        # Environment variables (DB_URL, API_KEYS)
+
+
+src/
+├── assets/            # Global CSS (index.css), logos, fonts
+├── components/        # Reusable UI "Lego bricks"
+│   ├── ui/            # Shadcn/UI primitives (Buttons, Cards, Inputs)
+│   ├── lab/           # Specific to the Lab (EquityChart, StatCards)
+│   └── dashboard/     # Specific to Live Feed (MatchRow, OddsDisplay)
+├── hooks/             # Custom React hooks (useLabData, useLiveMatches)
+├── layouts/           # Page shells (Sidebar, Navbar, MainLayout)
+├── pages/             # Your actual route views (LabPage, DashboardPage)
+├── services/          # API logic (api.ts - our Axios setup)
+├── types/             # TS interfaces (lab.ts, dashboard.ts)
+├── utils/             # Math/Formatting helpers (formatCurrency, calculateROI)
+├── App.tsx            # Main router and app shell
+└── main.tsx           # Entry point (the ReactDOM.render)

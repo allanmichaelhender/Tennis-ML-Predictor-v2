@@ -6,7 +6,7 @@ import random
 from sqlalchemy import select
 from app.database.session import async_session
 from app.models.match import Match
-from app.services.feature_assembler import FeatureAssembler
+from app.services.ml.feature_assembler import FeatureAssembler
 from datetime import date
 
 
@@ -28,7 +28,7 @@ class PNLService:
         return min(suggested_pct, self.max_bet_pct)
 
     async def run_backtest(self):
-        cutoff_date = date(2025, 1, 1) 
+        cutoff_date = date(2025, 1, 1)
         print(f"💰 Starting Full-Tour Backtest from {cutoff_date}...")
 
         async with async_session() as session:
@@ -62,73 +62,55 @@ class PNLService:
                 p1_v1 = self.xgb.predict_proba(x_norm)[0][1]
                 p1_v2 = 1.0 - self.xgb.predict_proba(x_flip)[0][1]
 
-                # The "Honest" Probabilities
                 p1_prob = (p1_v1 + p1_v2) / 2
                 p2_prob = 1.0 - p1_prob
 
-                # 3. SELECT ODDS (Pinnacle -> B365)
-                # In our DB, P1 is ALWAYS the winner (m.w_...)
+                # 3. SELECT ODDS
                 p1_odds = m.ps_w if m.ps_w else m.b365_w
                 p2_odds = m.ps_l if m.ps_l else m.b365_l
-                # p1_odds = m.b365_w
-                # p2_odds = m.b365_l
 
-                #Fair Price comparison
-                total_implied_prob = (1 / p1_odds) + (1 / p2_odds)
-                overround = total_implied_prob - 1.0
-
-                # 3. CALCULATE THE "FAIR" (NO-VIG) PROBABILITIES
-                # We normalize the bookie's odds by the total implied probability
-                fair_market_p1_prob = (1 / p1_odds) / total_implied_prob
-                fair_market_p2_prob = (1 / p2_odds) / total_implied_prob
-
-                # 4. CALCULATE THE "FAIR" ODDS
-                # These are the odds if the bookie took ZERO commission
-                fair_p1_odds = 1 / fair_market_p1_prob
-                fair_p2_odds = 1 / fair_market_p2_prob
-
-
-                # 4. BETTING LOGIC
+                # 4. BETTING LOGIC (Keep your +0.05 filter here for ROI)
                 bet_placed = False
+                is_win = False
                 pnl = 0
-                bet_on = ""
+                bet_on = "None" # 🎯 Default to None
+                bet_amount = 0
 
-                # Try P1 Side (The Actual Winner)
-                if p1_prob > (1 / fair_p1_odds) + 0.05:
-                    pct = self.get_bet_size(p1_prob, fair_p1_odds)
-                    bet_amount = current_balance * pct
-                    # bet_amount = 10
-                    pnl = (fair_p1_odds - 1) * bet_amount  # WIN
-                    bet_on = "P1 (Winner)"
+                if p1_prob > (1 / p1_odds) + 0.05:
+                    bet_amount = current_balance * self.get_bet_size(p1_prob, p1_odds)
+                    pnl = (p1_odds - 1) * bet_amount
+                    is_win = True
+                    bet_on = "P1"
+                    bet_placed = True
+                elif p2_prob > (1 / p2_odds) + 0.05:
+                    bet_amount = current_balance * self.get_bet_size(p2_prob, p2_odds)
+                    pnl = -bet_amount
+                    is_win = False
+                    bet_on = "P2"
                     bet_placed = True
 
-                # Try P2 Side (The Actual Loser)
-                elif p2_prob > (1 / fair_p2_odds) + 0.05:
-                    pct = self.get_bet_size(p2_prob, fair_p2_odds)
-                    bet_amount = current_balance * pct
-                    # bet_amount = 10
-                    pnl = -bet_amount  # LOSS
-                    bet_on = "P2 (Loser)"
-                    bet_placed = True
-
-                # 5. UPDATE BANKROLL
-                if bet_placed and bet_amount > 0:
+                # 5. UPDATE BANKROLL & LOG EVERYTHING
+                if bet_placed:
                     current_balance += pnl
-                    history.append(
-                        {
-                            "date": m.tourney_date,
-                            "match": f"{m.winner_id} vs {m.loser_id}",
-                            "bet_on": bet_on,
-                            "bet_amount": bet_amount,
-                            "p1_prob": f"{p1_prob:.2%}",
-                            "odds": p1_odds if bet_on == "P1 (Winner)" else p2_odds,
-                            "pnl": round(pnl, 2),
-                            "balance": round(current_balance, 2),
-                        }
-                    )
-                print(f"{m.winner_name} vs {m.loser_name} | Model: {p1_prob:.2%} | Fair: {fair_market_p1_prob:.2%}")
 
-
+                # 🎯 RECORD EVERY MATCH REGARDLESS OF BET
+                history.append({
+                    "date": m.tourney_date,
+                    "match_id": m.id,
+                    "p1_name": m.winner_name, 
+                    "p2_name": m.loser_name, 
+                    "bet_on": bet_on,        # Will be "None", "P1", or "P2"
+                    "bet_amount": bet_amount, # Will be 0 if no bet
+                    "is_win": is_win,         # Only meaningful if bet_placed
+                    "actual_winner": "P1",    # In your DB, P1 is always the winner
+                    "p1_prob": p1_prob,       # THE RAW BRAIN DATA
+                    "p2_prob": p2_prob,
+                    "p1_odds": p1_odds,
+                    "p2_odds": p2_odds,
+                    "pnl": pnl,
+                    "balance": current_balance,
+                })
+         
             # 6. RESULTS
             results_df = pd.DataFrame(history)
             results_df.to_csv("app/ml/data/betting_results.csv", index=False)

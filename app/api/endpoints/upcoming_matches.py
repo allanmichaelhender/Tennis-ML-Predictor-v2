@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, get_api_key
-from app.services.llm_service import LLMService
-from app.services.inference_service import inference_service
+from app.services.data.llm_service import LLMService
+from app.services.ml.inference_service import inference_service
 from app.core.ratelimit import limiter
 from app.schemas.upcoming import SyncMatchesResponse
 from app.models.player_state import PlayerState

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from app.models.player_state import PlayerState
 from fastapi import HTTPException
-from app.services.feature_assembler import FeatureAssembler
+from app.services.ml.feature_assembler import FeatureAssembler
 import joblib
 
 assembler = FeatureAssembler()

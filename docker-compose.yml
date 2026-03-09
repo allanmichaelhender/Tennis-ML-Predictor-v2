@@ -60,9 +60,10 @@ services:
   frontend:
     build: ./frontend
     container_name: tennis_ui
+    working_dir: /project/frontend
     volumes:
-      - ./frontend:/project         # Syncs your code (src, etc.)
-      - /project/node_modules       # <--- THIS IS THE FIX: Keeps node_modules INSIDE Docker only
+      - ./frontend:/project/frontend
+      - /project/frontend/node_modules
     ports:
       - "5173:5173"
     environment:
