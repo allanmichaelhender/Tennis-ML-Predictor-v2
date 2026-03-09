@@ -1,0 +1,6 @@
+**/node_modules
+**/dist
+**/.vite
+.git
+.venv
+frontend/node_modules
