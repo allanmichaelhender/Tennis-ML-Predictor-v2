@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
-import type { ModelPerformanceResponse, CalibrationPoint, EdgeBucket } from '../types/lab';
+import type { ModelPerformanceResponse } from '../types/lab';
 
 export function usePerformance() {
   const [data, setData] = useState<ModelPerformanceResponse | null>(null);
