@@ -12,7 +12,7 @@ class PlayerState(Base):
     player_name: Mapped[str] = mapped_column(String(150), index=True)
 
     # Power - General is Required, others are Optional
-    current_elo: Mapped[float] = mapped_column(Float, default=1500.0)
+    current_elo: Mapped[float | None] = mapped_column(Float, default=1500.0)
     current_hard_elo: Mapped[float | None] = mapped_column(Float)
     current_clay_elo: Mapped[float | None] = mapped_column(Float)
     current_grass_elo: Mapped[float | None] = mapped_column(Float)
