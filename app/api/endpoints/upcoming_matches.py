@@ -7,7 +7,7 @@ from sqlalchemy import select, delete, desc
 from app.database.session import async_session  # 🎯 Import your session factory
 from app.models.upcoming_match import UpcomingMatch
 from app.models.player_state import PlayerState
-from app.services.data import llm_service
+from app.services.data.llm_service import llmservice
 from app.services.ml.inference_service import inference_service
 from app.api.deps import get_api_key, get_db
 from app.schemas.upcoming import SyncMatchesResponse
@@ -23,11 +23,22 @@ async def run_heavy_sync():
         print("💎 Starting Heavy Sync: Calling Gemini & Model Inference...")
         
         # 1. Get matches from Gemini
-        featured_matches = await llm_service.sync_upcoming_matches(session)
+        featured_matches = await llmservice.sync_upcoming_matches(session)
+
+        seen_matchups = set()
+        unique_matches = []
+
+        for m in featured_matches:
+            # Create a sorted tuple of IDs so (A, B) and (B, A) look identical
+            matchup_key = tuple(sorted([str(m["p1_id"]), str(m["p2_id"])]))
+            
+            if matchup_key not in seen_matchups:
+                seen_matchups.add(matchup_key)
+                unique_matches.append(m)
 
         # 2. Map Players (The 'Big Pluck')
-        unique_ids = {m["p1_id"] for m in featured_matches if m["p1_id"]} | \
-                     {m["p2_id"] for m in featured_matches if m["p2_id"]}
+        unique_ids = {m["p1_id"] for m in unique_matches if m["p1_id"]} | \
+                     {m["p2_id"] for m in unique_matches if m["p2_id"]}
         
         result = await session.execute(select(PlayerState).where(PlayerState.player_id.in_(list(unique_ids))))
         player_map = {p.player_id: p for p in result.scalars().all()}
@@ -36,9 +47,13 @@ async def run_heavy_sync():
         db_matches = []
         now = datetime.now(timezone.utc)
 
-        for m in featured_matches:
+        for m in unique_matches:
             p1_row = player_map.get(m["p1_id"])
             p2_row = player_map.get(m["p2_id"])
+
+            raw_time = m["commence_time"].replace("Z", "+00:00")
+            dt_commence = datetime.fromisoformat(raw_time)
+
 
             if p1_row and p2_row:
                 prediction = await inference_service.predict(
@@ -54,15 +69,16 @@ async def run_heavy_sync():
                     p2_id=m["p2_id"],
                     p1_name=m["p1_name"],
                     p2_name=m["p2_name"],
-                    commence_time=m["commence_time"],
+                    commence_time=dt_commence,
                     tournament=m["tournament"],
                     surface=m["surface"],
                     pin_p1=m.get("pin_p1"),
                     pin_p2=m.get("pin_p2"),
-                    predicted_p1_prob=prediction["p1_prob"],
-                    predicted_p2_prob=prediction["p2_prob"],
+                    p1_prob=prediction["p1_prob"],
+                    p2_prob=prediction["p2_prob"],
                     synced_at=now
                 ))
+
 
         if db_matches:
             # 4. Atomic Swap: Clear old and insert new
@@ -78,7 +94,7 @@ async def get_live_dashboard(background_tasks: BackgroundTasks, session: AsyncSe
     Returns cached data instantly. Triggers sync if data is > 12 hours old.
     """
     # 1. Fetch current cache
-    stmt = select(UpcomingMatch).order_by(UpcomingMatch.synced_at.desc())
+    stmt = select(UpcomingMatch).order_by(UpcomingMatch.commence_time.asc())
     result = await session.execute(stmt)
     cached_matches = result.scalars().all()
 

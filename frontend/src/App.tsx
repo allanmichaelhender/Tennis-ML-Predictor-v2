@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import LabPage from './pages/LabPage';
 import DashboardPage from './pages/DashboardPage'; // 🎯 Import the new page
-import { LayoutDashboard, Beaker, Zap } from 'lucide-react';
+import { LayoutDashboard, Beaker, Trophy } from 'lucide-react';
 
 function App() {
   // 🧭 Simple state-based routing
@@ -13,9 +13,9 @@ function App() {
       <aside className="w-64 border-r border-slate-800 bg-slate-900/50 p-6 flex flex-col gap-8 sticky top-0 h-screen">
         <div className="flex items-center gap-3 px-2">
           <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/20">
-            <Zap size={20} className="fill-current text-white" />
+            <Trophy size={20} className="text-white" />
           </div>
-          <span className="font-bold text-xl tracking-tight">TENNIS.AI</span>
+          <span className="font-bold text-xl tracking-tight">Vantage Point</span>
         </div>
 
         <nav className="flex flex-col gap-2">

@@ -39,10 +39,35 @@ export function EdgeChart({ data }: { data: EdgeBucket[] }) {
           />
           
           <Tooltip 
-            cursor={{ fill: '#ffffff', opacity: 0.4 }}
-            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px' }}
-            formatter={(value: number) => [`${(value * 100).toFixed(2)}%`, 'ROI']}
-          />
+  cursor={{ fill: '#ffffff', opacity: 0.05 }}
+  content={({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      const value = Number(data.value);
+      const isPositive = value >= 0;
+
+      return (
+        <div className="bg-slate-950 border border-slate-800 p-3 rounded-lg shadow-2xl">
+          <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">
+            {data.payload.bucket} Edge
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-300">ROI:</span>
+            <span 
+              className="text-sm font-mono font-bold" 
+              style={{ color: isPositive ? '#22c55e' : '#ef4444' }}
+            >
+              {(value * 100).toFixed(2)}%
+            </span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }}
+/>
+
+
           
           <ReferenceLine y={0} stroke="#475569" />
           

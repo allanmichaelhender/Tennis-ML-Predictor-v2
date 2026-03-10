@@ -46,7 +46,7 @@ export default function DashboardPage() {
       </header>
 
       {/* 📊 Summary Banner (Quick Context) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
           <div className="p-2 bg-green-500/10 rounded-lg text-green-400">
             <TrendingUp size={20} />
@@ -80,7 +80,7 @@ export default function DashboardPage() {
             <p className="text-lg font-mono text-white">94.1% (High)</p>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {manualPredictions.length > 0 && (
         <section className="mb-12 animate-in slide-in-from-top duration-500">
