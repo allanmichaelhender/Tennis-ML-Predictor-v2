@@ -19,9 +19,9 @@ services:
     container_name: tennis_pgadmin
     restart: always
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-      # This allows pgAdmin to save settings without asking for a Master Password
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: 'False' # Optional: better for single-user
       PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: 'False'
     ports:
       - "8080:80"
