@@ -32,4 +32,4 @@ class PlayerState(Base):
     rolling_bp_save_pct: Mapped[float | None] = mapped_column(Float)
     rolling_return_won_pct: Mapped[float | None] = mapped_column(Float)
     
-    current_tournament_fatigue: Mapped[float] = mapped_column(Float, server_default="0.0", default=0.0)
+    current_tournament_fatigue: Mapped[float | None] = mapped_column(Float, server_default="0.0", default=0.0)
