@@ -140,23 +140,23 @@ async def ingest_csv_file(file_path: str):
                 stmt = insert(Match).values(matches_data).on_conflict_do_nothing()
                 await session.execute(stmt)
 
-                # Inserting player names
-                query = text("""
-
+                await session.execute(
+                    text("""
 UPDATE matches 
 SET winner_name = players.player
 FROM players
 WHERE matches.winner_id = players.id 
-  AND matches.winner_name IS NULL;
-
+  AND matches.winner_name IS NULL;""")
+                )
+                await session.execute(
+                    text("""
 UPDATE matches 
 SET loser_name = players.player
 FROM players
 WHERE matches.loser_id = players.id 
   AND matches.loser_name IS NULL;
     """)
-
-                result = await session.execute(query)
+                )
 
                 await session.commit()
 
