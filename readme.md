@@ -8,6 +8,11 @@
 - **Production-Grade Infrastructure**: Uses Docker Compose for containerized deployment, Nginx for reverse proxy, and SSL/TLS security.
 - **Real-Time Dashboard**: A React UI with dynamic polling hooks and interactive Recharts data visualizations.
 
+## 🚀 Live Demo
+**[View Live App](https://vantage-point.ddnsfree.com/)** (Deployed on GCP with Nginx/SSL)
+
+---
+
 ## 🛠️ Tech Stack
 
 ### Backend & AI
