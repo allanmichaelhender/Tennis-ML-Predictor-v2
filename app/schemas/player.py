@@ -1,26 +1,8 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict
 
-class PlayerBase(BaseModel):
-    id: str = Field(..., example="104925")
-    name: str = Field(..., example="Novak Djokovic")
-    country: Optional[str] = None
-    hand: Optional[str] = Field(None, example="R") # R, L, U
+class Players(BaseModel):
+    player_id: int
+    player_name: str
 
-class PlayerSearchResponse(PlayerBase):
-    """Minimal schema for the fast Autocomplete dropdown"""
-    current_rank: Optional[int] = None
-    
-    class Config:
-        from_attributes = True
-
-class PlayerDetailResponse(PlayerSearchResponse):
-    """Full schema for the 'Battle' page profile"""
-    elo: float
-    surface_elo: float
-    height: Optional[int] = None
-    birth_date: Optional[str] = None
-
-class PlayerListResponse(BaseModel):
-    count: int
-    players: List[PlayerSearchResponse]
+    # Pydantic expects dictonaries, this line allows Pydnatic to use object attributes to extract variables
+    model_config = ConfigDict(from_attributes=True)

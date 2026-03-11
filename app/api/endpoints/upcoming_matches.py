@@ -1,8 +1,7 @@
-# app/api/endpoints/matches.py
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Security, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, desc
+from sqlalchemy import select, delete
 
 from app.database.session import async_session  # 🎯 Import your session factory
 from app.models.upcoming_match import UpcomingMatch
@@ -10,53 +9,52 @@ from app.models.player_state import PlayerState
 from app.services.data.llm_service import llmservice
 from app.services.ml.inference_service import inference_service
 from app.api.deps import get_api_key, get_db
-from app.schemas.upcoming import SyncMatchesResponse
 
 router = APIRouter()
 
 async def run_heavy_sync():
-    """
-    The 'Heavy Lifter' that actually spends Gemini tokens and runs XGBoost.
-    Runs in the background so the user doesn't have to wait.
-    """
     async with async_session() as session:
-        print("💎 Starting Heavy Sync: Calling Gemini & Model Inference...")
-        
-        # 1. Get matches from Gemini
+        # Get matches from Gemini + ODDS api service
         featured_matches = await llmservice.sync_upcoming_matches(session)
 
-        seen_matchups = set()
-        unique_matches = []
+        # seen_matchups = set()
+        # unique_matches = []
 
-        for m in featured_matches:
-            # Create a sorted tuple of IDs so (A, B) and (B, A) look identical
-            matchup_key = tuple(sorted([str(m["p1_id"]), str(m["p2_id"])]))
+        # for m in featured_matches:
+        #     # Create a sorted tuple of IDs so (A, B) and (B, A) look identical
+        #     matchup_key = tuple(sorted([str(m["p1_id"]), str(m["p2_id"])]))
             
-            if matchup_key not in seen_matchups:
-                seen_matchups.add(matchup_key)
-                unique_matches.append(m)
+        #     if matchup_key not in seen_matchups:
+        #         seen_matchups.add(matchup_key)
+        #         unique_matches.append(m)
 
-        # 2. Map Players (The 'Big Pluck')
-        unique_ids = {m["p1_id"] for m in unique_matches if m["p1_id"]} | \
-                     {m["p2_id"] for m in unique_matches if m["p2_id"]}
+        # # 2. Map Players (The 'Big Pluck')
+        # unique_ids = {m["p1_id"] for m in unique_matches if m["p1_id"]} | \
+        #              {m["p2_id"] for m in unique_matches if m["p2_id"]}
+
+        # Creating a set of ids, uniqueness is implied being set
+        unique_ids = {m["p1_id"] for m in featured_matches if m["p1_id"]} | \
+                     {m["p2_id"] for m in featured_matches if m["p2_id"]}
         
+        # Pull all the associated player states
         result = await session.execute(select(PlayerState).where(PlayerState.player_id.in_(list(unique_ids))))
         player_map = {p.player_id: p for p in result.scalars().all()}
 
-        # 3. Predict & Build DB Objects
+        # Predict & Build DB Objects
         db_matches = []
         now = datetime.now(timezone.utc)
 
-        for m in unique_matches:
+        # building out each featured match entry
+        for m in featured_matches:
             p1_row = player_map.get(m["p1_id"])
             p2_row = player_map.get(m["p2_id"])
 
             raw_time = m["commence_time"].replace("Z", "+00:00")
             dt_commence = datetime.fromisoformat(raw_time)
 
-
             if p1_row and p2_row:
-                prediction = await inference_service.predict(
+                # We use inference service to predict the result of each game
+                prediction = await inference_service.predict( 
                     session=session,
                     p1_row=p1_row,
                     p2_row=p2_row,
@@ -79,27 +77,26 @@ async def run_heavy_sync():
                     synced_at=now
                 ))
 
-
         if db_matches:
-            # 4. Atomic Swap: Clear old and insert new
+            # Deleting all existing match objects in the db
             await session.execute(delete(UpcomingMatch))
+
+            # We use add all to easily insert a listr of Upcoming match objects
             session.add_all(db_matches)
             await session.commit()
-            print(f"✅ Heavy Sync Complete: {len(db_matches)} matches cached.")
 
+
+# Returns the upcoming games for display on the dashboard
 @router.get("/sync", dependencies=[Security(get_api_key)])
-async def get_live_dashboard(background_tasks: BackgroundTasks, session: AsyncSession = Depends(get_db)):
-    """
-    The 'Smart' Endpoint. 
-    Returns cached data instantly. Triggers sync if data is > 12 hours old.
-    """
-    # 1. Fetch current cache
+async def get_live_dashboard(background_tasks: BackgroundTasks, session: AsyncSession = Depends(get_db)): # BackgroundTasks allows fire and forget functionality of a function
+    
+    #Fetch current cached matches
     stmt = select(UpcomingMatch).order_by(UpcomingMatch.commence_time.asc())
     result = await session.execute(stmt)
     cached_matches = result.scalars().all()
 
     now = datetime.now(timezone.utc)
-    needs_sync = True
+    needs_sync = True # Default setting incase cache is empty
 
     if cached_matches:
         # Check if the last sync was within 12 hours
@@ -107,11 +104,12 @@ async def get_live_dashboard(background_tasks: BackgroundTasks, session: AsyncSe
         if now - last_sync < timedelta(hours=12):
             needs_sync = False
 
-    # 2. If stale or empty, trigger the background task
+    # If stale or older than 12 hours since last sync, trigger the background task
     if needs_sync:
         print("🕒 Cache stale/empty. Dispatching background sync...")
         background_tasks.add_task(run_heavy_sync)
 
+    # we return the cached matches, status and last sync time, the frontend hits the endpoint every few seconds until it gets fresh as the status and the corresponding new set of games
     return {
         "matches": cached_matches, 
         "status": "fresh" if not needs_sync else "revalidating",

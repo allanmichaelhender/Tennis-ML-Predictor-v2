@@ -8,28 +8,28 @@ class ManualPredictRequest(BaseModel):
 
 class PlayerStateSchema(BaseModel):
     player_id: str
-    player_name: str  # 🎯 Added
+    player_name: str  
     current_elo: float
     current_hard_elo: Optional[float]
     current_clay_elo: Optional[float]
     current_grass_elo: Optional[float]
     last_match_date: Optional[Any]
-    last_hard_match_date: Optional[Any]   # 🎯 Added
-    last_clay_match_date: Optional[Any]   # 🎯 Added
-    last_grass_match_date: Optional[Any]  # 🎯 Added
+    last_hard_match_date: Optional[Any]   
+    last_clay_match_date: Optional[Any]   
+    last_grass_match_date: Optional[Any]  
     rolling_match_win_pct: float
-    rolling_game_win_pct: float           # 🎯 Added
-    rolling_serve_won_pct: float          # 🎯 Added
+    rolling_game_win_pct: float           
+    rolling_serve_won_pct: float          
     rolling_ace_per_game: float
-    rolling_df_per_pt: float              # 🎯 Added
+    rolling_df_per_pt: float              
     rolling_bp_save_pct: float
-    rolling_return_won_pct: float         # 🎯 Added
+    rolling_return_won_pct: float         
     current_tournament_fatigue: float
 
     model_config = ConfigDict(from_attributes=True)
 
 class ManualPredictResponse(BaseModel):
-    p1_prob: float  # 🎯 Switched from str to float
-    p2_prob: float  # 🎯 Switched from str to float
+    p1_prob: float 
+    p2_prob: float 
     p1_stats: PlayerStateSchema
     p2_stats: PlayerStateSchema

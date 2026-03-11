@@ -1,24 +1,17 @@
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
-# Use the exact URL we verified in your alembic.ini
-# Fallback to the Docker service name if the environment variable isn't set
+# we use asyncpg to allow asyncio to work with
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql+asyncpg://postgres:postgres@db:5432/tennis_analytics"
-)
+    "DATABASE_URL")
 
-# 1. Create the Async Engine
-# echo=True is helpful for debugging SQL, set to False for production
+# The engine manages connection sessions, we have a max number of sessions of 20
 engine = create_async_engine(
     DATABASE_URL,
-    echo=False,
-    future=True,
-    pool_size=20,       # Professional pool size for high-concurrency
-    max_overflow=10
+    pool_size=20
 )
 
-# 2. Create the Async Session Factory
+# Async Session Factory
 # expire_on_commit=False prevents 'detached instance' errors in Asyncio
 async_session = async_sessionmaker(
     engine, 
@@ -27,8 +20,7 @@ async_session = async_sessionmaker(
     autoflush=False
 )
 
-# 3. FastAPI Dependency
-# This allows you to use 'db: AsyncSession = Depends(get_db)' in your routes
+ # FastAPI Dependency
 async def get_db():
     async with async_session() as session:
         try:

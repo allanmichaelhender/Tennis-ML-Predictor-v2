@@ -2,20 +2,20 @@ from pydantic import BaseModel
 from typing import List
 
 class PerformanceSummary(BaseModel):
-    roi: float            # e.g., 0.042 (4.2%)
-    total_profit: float   # Net units (+/-)
-    win_rate: float       # % of bets won
-    brier_score: float    # Probability accuracy (lower is better)
-    total_bets: int       # Sample size
+    roi: float          
+    total_profit: float   
+    win_rate: float      
+    brier_score: float    
+    total_bets: int       
 
 class WeeklyPoint(BaseModel):
-    date: str             # e.g., "2025-01-12"
-    balance: float        # The closing balance of that week
+    date: str             
+    balance: float        
 
 class MonthlyStat(BaseModel):
-    month: str            # e.g., "Jan 2025"
-    roi: float            # ROI specifically for that month
-    profit: float         # Profit specifically for that month
+    month: str            
+    roi: float            
+    profit: float         
 
 class ModelPerformanceResponse(BaseModel):
     summary: PerformanceSummary
