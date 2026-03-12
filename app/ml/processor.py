@@ -8,16 +8,20 @@ from sqlalchemy import create_engine
 
 class TennisDataProcessor:
     def __init__(self):
+        # Encoding player id's
         self.player_encoder = LabelEncoder()
+
+        # Encoding surfaces
         self.surface_encoder = LabelEncoder()
+
+        # Our scalar
         self.scaler = StandardScaler()
         
+    # Fetching data from db function
     def fetch_raw_data(self):
-        # 1. Get the DB URL (Convert from asyncpg to psycopg2 if needed)
-        # Assuming your .env has postgresql+asyncpg://...
-        db_url = os.getenv("DATABASE_URL").replace("asyncpg", "psycopg2")
+        db_url = os.getenv("DATABASE_URL").replace("asyncpg", "psycopg2") # We swap to psycopg2 because we are using syncronous
         
-        # 2. Create a temporary Sync Engine
+        # Creating a syncronous engine
         sync_engine = create_engine(db_url)
         
         query = """
@@ -38,21 +42,20 @@ class TennisDataProcessor:
                 l_rolling_return_won_pct, l_tournament_fatigue
             FROM matches 
             WHERE w_elo_before IS NOT NULL 
+            AND l_elo_before IS NOT NULL
             AND is_retirement = FALSE
         """
         
-        print("📥 Pulling data using Sync Engine...")
         return pd.read_sql(query, sync_engine)
 
     def process_and_balance(self, df):
         print(f"📊 Original matches: {len(df)}")
         
-        # 1. Standardise Date
+        # Converting to python datetime
         df['tourney_date'] = pd.to_datetime(df['tourney_date'])
 
-        # 2. Define the Mapping (CRITICAL: Every w_ must map to p1, every l_ to p2)
-        # Ensure this list contains EVERY feature you want to use
-        rename_map = {
+        # regular map = map winner to p1
+        regular_map = {
             'winner_id': 'p1_id', 'loser_id': 'p2_id',
             'w_elo_before': 'p1_elo', 'l_elo_before': 'p2_elo',
             'w_surface_elo_before': 'p1_surf_elo', 'l_surface_elo_before': 'p2_surf_elo',
@@ -68,12 +71,11 @@ class TennisDataProcessor:
             'w_tournament_fatigue': 'p1_fatigue', 'l_tournament_fatigue': 'p2_fatigue'
         }
 
-        # 3. Create the "Winner = P1" half (Target 1)
+        # Create the "Winner = P1" half (Target 1)
         df_1 = df.copy()
-        df_1 = df_1.rename(columns=rename_map)
+        df_1 = df_1.rename(columns=regular_map)
         df_1['target'] = 1.0
 
-        # 4. Create the "Loser = P1" half (Target 0) - THE FLIP
         # This maps 'winner_id' to 'p2_id' and 'loser_id' to 'p1_id'
         flip_map = {
             'winner_id': 'p2_id', 'loser_id': 'p1_id',
@@ -90,15 +92,17 @@ class TennisDataProcessor:
             'w_rolling_return_won_pct': 'p2_ret_won', 'l_rolling_return_won_pct': 'p1_ret_won',
             'w_tournament_fatigue': 'p2_fatigue', 'l_tournament_fatigue': 'p1_fatigue'
         }
+
+        # Create the "Loser = P1" half (Target 0)
         df_0 = df.copy()
         df_0 = df_0.rename(columns=flip_map)
         df_0['target'] = 0.0
 
-        # 5. Combine (Now tourney_date is present and columns are perfectly balanced)
+        # Combining the regular and flipped data
         combined_df = pd.concat([df_1, df_0], axis=0).reset_index(drop=True)
         combined_df = combined_df.fillna(0)
 
-        # 6. Label Encoding for Embeddings
+        # Label Encoding Categorical features
         all_ids = pd.concat([df['winner_id'], df['loser_id']]).unique()
         self.player_encoder.fit(all_ids)
         
@@ -106,13 +110,16 @@ class TennisDataProcessor:
         combined_df['p2_id_idx'] = self.player_encoder.transform(combined_df['p2_id'])
         combined_df['surface_idx'] = self.surface_encoder.fit_transform(combined_df['surface'])
         
-        # 7. Scaling Continuous Features (Ensure you include ALL p1 and p2 numeric cols)
+        # Scaling Continuous Features
         cont_cols = [c for c in combined_df.columns if c.startswith(('p1_', 'p2_')) and not c.endswith('_id') and not c.endswith('_idx')]
         combined_df[cont_cols] = self.scaler.fit_transform(combined_df[cont_cols])
+
+        # Remember, our data is p1 wins first half, p2 wins second half, this line randomises the order to remove ordering bias
+        combined_df = combined_df.sample(frac=1).reset_index(drop=True)
         
         return combined_df
 
-
+    # Saving our encoders/python objects
     def save_processors(self):
         joblib.dump(self.player_encoder, 'app/ml/models/player_encoder.pkl')
         joblib.dump(self.surface_encoder, 'app/ml/models/surface_encoder.pkl')
