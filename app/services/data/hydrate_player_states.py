@@ -41,10 +41,16 @@ class StateHydrator:
     ) AS combined
     ORDER BY p_id, m_date DESC, match_id DESC 
     ON CONFLICT (player_id) DO UPDATE SET
-        current_elo = EXCLUDED.current_elo,
-        last_match_date = EXCLUDED.last_match_date,
-        ...
-""")
+            current_elo = EXCLUDED.current_elo,
+            last_match_date = EXCLUDED.last_match_date,
+            rolling_match_win_pct = EXCLUDED.rolling_match_win_pct,
+            rolling_game_win_pct = EXCLUDED.rolling_game_win_pct,
+            rolling_serve_won_pct = EXCLUDED.rolling_serve_won_pct,
+            rolling_ace_per_game = EXCLUDED.rolling_ace_per_game,
+            rolling_df_per_pt = EXCLUDED.rolling_df_per_pt,
+            rolling_bp_save_pct = EXCLUDED.rolling_bp_save_pct,
+            rolling_return_won_pct = EXCLUDED.rolling_return_won_pct;
+    """)
 
         await session.execute(query)
         await session.commit()
