@@ -92,6 +92,8 @@ services:
   certbot:
     image: certbot/certbot
     container_name: tennis_certbot
+    profiles:
+      - tools 
     volumes:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
