@@ -130,6 +130,9 @@ class StateHydrator:
             await self.run_fatigue_calc(session)
             print("🚀 Hydration Complete. PlayerState is Quant-Ready.")
 
+
+hydrator = StateHydrator()
+
+
 if __name__ == "__main__":
-    hydrator = StateHydrator()
     asyncio.run(hydrator.execute_all())

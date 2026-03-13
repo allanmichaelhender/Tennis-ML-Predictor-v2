@@ -1,99 +1,84 @@
-import {
-  ComposedChart,
-  Line,
-  Scatter,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from "recharts";
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, 
+  Tooltip, ResponsiveContainer, Line 
+} from 'recharts';
+import type { CalibrationPoint } from '../../types/lab';
 
-export function CalibrationChart({ data }: { data: any[] }) {
-  if (!data || data.length === 0)
-    return (
-      <div className="h-[400px] flex items-center justify-center text-slate-500 italic">
-        No Calibration Data
-      </div>
-    );
-
+export function CalibrationChart({ data }: { data: CalibrationPoint[] }) {
   return (
-    <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl h-[400px]">
+    <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl h-[400px] w-full">
       <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">
-        Reliability Diagram (Calibration)
+        Model Calibration (Reliability)
       </h3>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart
-          data={data}
-          margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="#1e293b"
-            vertical={false}
+        <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+          <XAxis 
+            dataKey="prob_bucket" 
+            stroke="#475569" 
+            fontSize={12} 
+            tickMargin={10} 
           />
-
-          {/* 🎯 Using avg_predicted for X-Axis */}
-          <XAxis
-            dataKey="avg_predicted"
-            type="number"
-            domain={[0.5, 1]}
-            stroke="#475569"
-            fontSize={12}
-            tickFormatter={(val) => `${(val * 100).toFixed(0)}%`}
+          <YAxis 
+            stroke="#475569" 
+            fontSize={12} 
+            domain={[0, 1]} 
+            tickFormatter={(val) => `${(val * 100).toFixed(0)}%`} 
           />
-
-          {/* 🎯 Using actual_win_rate for Y-Axis */}
-          <YAxis
-            type="number"
-            domain={[0.5, 1]}
-            stroke="#475569"
-            fontSize={12}
-            tickFormatter={(val) => `${(val * 100).toFixed(0)}%`}
-          />
-
+          
           <Tooltip
-            cursor={{ strokeDasharray: "3 3" }}
             contentStyle={{
               backgroundColor: "#0f172a",
               border: "1px solid #1e293b",
               borderRadius: "8px",
-              fontSize: "12px",
             }}
-            // Fix the Label (X-Axis)
-            labelFormatter={(val) => `Predicted: ${(val * 100).toFixed(1)}%`}
-            // Fix the Values (Y-Axis)
-            formatter={(val: any) => [
-              `${(val * 100).toFixed(1)}%`,
-              "Actual Win Rate",
-            ]}
+            labelStyle={{ color: "#94a3b8", fontWeight: "bold", marginBottom: "4px" }}
+            itemStyle={{ fontSize: "12px" }}
+            // 🎯 The Fix: Cast to 'any' to bypass TS strictness and show 3 fields
+            formatter={(value: any, name: any, props: any) => {
+              const { payload } = props;
+              if (name === "avg_predicted") {
+                return [`${(Number(value) * 100).toFixed(1)}%`, "Model Confidence"];
+              }
+              if (name === "actual_win_rate") {
+                return [
+                  `${(Number(value) * 100).toFixed(1)}%`, 
+                  `Actual Win Rate (${payload.match_count} matches)`
+                ];
+              }
+              return [value, name];
+            }}
           />
 
-          {/* The Perfect Calibration Line (Diagonal) */}
-          <ReferenceLine
-            segment={[
-              { x: 0.5, y: 0.5 },
-              { x: 1, y: 1 },
-            ]}
-            stroke="#475569"
-            strokeDasharray="5 5"
+          {/* 🎯 Perfect Calibration Line (The 'Ideal' Path) */}
+          <Line 
+            type="monotone" 
+            dataKey="avg_predicted" 
+            stroke="#475569" 
+            strokeDasharray="5 5" 
+            dot={false} 
           />
 
-          {/* 🎯 Mapping to actual_win_rate */}
-          <Scatter
-            name="Actual Results"
-            dataKey="actual_win_rate"
-            fill="#3b82f6"
-          />
-          <Line
+          {/* 🎯 Actual Performance Area */}
+          <Area
+            name="actual_win_rate"
             type="monotone"
             dataKey="actual_win_rate"
+            stroke="#22c55e"
+            fill="#22c55e"
+            fillOpacity={0.1}
+            strokeWidth={3}
+          />
+          
+          <Area
+            name="avg_predicted"
+            type="monotone"
+            dataKey="avg_predicted"
             stroke="#3b82f6"
-            dot={false}
+            fill="none"
             strokeWidth={2}
           />
-        </ComposedChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   );
