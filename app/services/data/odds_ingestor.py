@@ -26,7 +26,7 @@ async def ingest_bulk_odds(files_config):
             print(f"📡 Processing {year} odds from {path}...")
             df_odds = pd.read_csv(path)
             
-            # 1. Fetch DB matches for this year
+            # Fetch DB matches for this year
             stmt = select(Match).where(extract('year', Match.tourney_date) == year)
             result = await session.execute(stmt)
             db_matches = result.scalars().all()
@@ -56,7 +56,7 @@ async def ingest_bulk_odds(files_config):
                 except (ValueError, TypeError, KeyError):
                     continue
 
-            # 3. Bulk Update the DB
+            # Bulk Update the DB
             if updates:
                 await session.execute(update(Match), updates)
                 await session.commit()

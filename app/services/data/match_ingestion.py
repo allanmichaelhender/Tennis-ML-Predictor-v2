@@ -17,13 +17,8 @@ def parse_atp_score(score_str):
 
     s = str(score_str).strip()
 
-    # 1. is_retirement check
-    # Check if starts with a number (e.g., '6-4') vs 'W/O' or 'RET'
     is_retirement = "RET" in s.upper() or not re.match(r"^\d", s) or "W/O" in s.upper()
 
-    # 2. Extract Tiebreak Stats
-    # Tiebreaks in Sackmann/ATP are usually denoted by (5) or (10)
-    # We also check for the 7-6 or 6-7 game score
     sets = re.sub(r"\(.*?\)", "", s).replace("RET", "").replace("W/O", "").split()
 
     w_games, l_games, tb_played, tb_won = 0, 0, 0, 0
@@ -59,28 +54,28 @@ def clean_int(val):
 
 
 async def ingest_csv_file(file_path: str):
-    """Processes a single year of ATP data."""
     print(f"🔄 Processing {os.path.basename(file_path)}...")
     chunk_size = 600
 
-    # Load CSV with String IDs to prevent float scientific notation
     reader = pd.read_csv(
         file_path,
-        low_memory=False,
-        chunksize=chunk_size,
-        dtype={"winner_id": str, "loser_id": str},
+        low_memory=False, # Safer to do this since we are chunking anyway
+        chunksize=chunk_size, 
+        dtype={"winner_id": str, "loser_id": str}, # Better to force the dtypes rather than auto generate
     )
 
     total = 0
     async with async_session() as session:
-        result = await session.execute(select(Player.id))
-        valid_ids = set(result.scalars().all())
+
+        # Query the db to get a set of calie player id's, set ensures uniqueness
+        player_ids = await session.execute(select(Player.id))
+        valid_ids = set(player_ids.scalars().all())
 
         for df_chunk in reader:
-            # 2. Vectorized cleaning for the chunk
-            df_chunk = df_chunk.where(pd.notnull(df_chunk), None)
+            true_false_df = pd.notnull(df_chunk) # Non null values assigned true, nulls to false
+            df_chunk = df_chunk.where(true_false_df, None) # Peserves the trues and maps the falses to none, postgres likes none over np.nan
 
-            # 3. List Comprehension for the 1,000-row "bite"
+            # Making a list comprehension of every match in the chunk, fast way to put our data into a good form
             matches_data = [
                 {
                     "tourney_id": str(row["tourney_id"]),
@@ -97,6 +92,7 @@ async def ingest_csv_file(file_path: str):
                     "best_of": clean_int(row.get("best_of")) or 3,
                     "round": str(row["round"]),
                     "minutes": clean_int(row.get("minutes")),
+
                     # Winner Stats
                     "w_ace": clean_int(row.get("w_ace")),
                     "w_df": clean_int(row.get("w_df")),
@@ -109,6 +105,7 @@ async def ingest_csv_file(file_path: str):
                     "w_bpFaced": clean_int(row.get("w_bpFaced")),
                     "winner_rank": clean_int(row.get("winner_rank")),
                     "winner_ranking_points": clean_int(row.get("winner_rank_points")),
+
                     # Loser Stats
                     "l_ace": clean_int(row.get("l_ace")),
                     "l_df": clean_int(row.get("l_df")),
@@ -121,6 +118,7 @@ async def ingest_csv_file(file_path: str):
                     "l_bpFaced": clean_int(row.get("l_bpFaced")),
                     "loser_rank": clean_int(row.get("loser_rank")),
                     "loser_ranking_points": clean_int(row.get("loser_rank_points")),
+
                     # Accessing the unpacked tuple results
                     "is_retirement": res[0],
                     "total_games": res[1],
@@ -140,6 +138,7 @@ async def ingest_csv_file(file_path: str):
                 stmt = insert(Match).values(matches_data).on_conflict_do_nothing()
                 await session.execute(stmt)
 
+                # We use these two queries to add in the player names, leaning on our players table
                 await session.execute(
                     text("""
 UPDATE matches 
@@ -157,7 +156,6 @@ WHERE matches.loser_id = players.id
   AND matches.loser_name IS NULL;
     """)
                 )
-
                 await session.commit()
 
                 total += len(matches_data)
@@ -167,31 +165,11 @@ WHERE matches.loser_id = players.id
     return total
 
 
-async def hydrate_match_names(self, session):
-    print("🧬 Hydrating match names from player registry...")
-
-    # 🎯 This SQL maps the IDs to Names using your existing player_states table
-    query = text("""
-        UPDATE matches 
-        SET 
-            winner_name = p1.player_name,
-            loser_name = p2.player_name
-        FROM player_states p1, player_states p2
-        WHERE matches.winner_id = p1.player_id 
-          AND matches.loser_id = p2.player_id
-          AND (matches.winner_name IS NULL OR matches.loser_name IS NULL);
-    """)
-
-    result = await session.execute(query)
-    await session.commit()
-    print(f"✅ Successfully mapped names for {result.rowcount} matches.")
-
-
 async def main():
     DATA_DIR = "/project/app/tml-data"
     years = [f"{year}.csv" for year in range(2010, 2027)]
-    
-    grand_total = 0 # 🎯 Initialize grand total
+
+    grand_total = 0 
 
     for filename in years:
         file_path = os.path.join(DATA_DIR, filename)
@@ -200,11 +178,10 @@ async def main():
             count = await ingest_csv_file(file_path)
             grand_total += count
 
-    print("\n" + "="*30)
+    print("\n" + "=" * 30)
     print(f"🏁 ALL-TIME INGESTION COMPLETE")
     print(f"📊 Total Matches in Database: {grand_total}")
-    print("="*30)
-
+    print("=" * 30)
 
 
 if __name__ == "__main__":

@@ -1,17 +1,11 @@
 import os
 import json
-import httpx  # For the-odds-api requests
+import httpx 
 import google.generativeai as genai
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
-
-# Database imports
-from sqlalchemy import select, desc, or_
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-
-# Models (Make sure these match your actual file names)
 from app.models.player_state import PlayerState
-
 
 class LLMService:
     def __init__(self):
@@ -20,22 +14,21 @@ class LLMService:
         genai.configure(api_key=self.gemini_key)
         self.model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
+    # Class method to fetch top playesr
     async def get_elite_100(self, session: AsyncSession):
-        """Fetch top 100 active players from Postgres"""
-        one_year_ago = datetime.now() - timedelta(days=365)
+        six_months_ago = datetime.now() - timedelta(days=182)
         stmt = (
             select(
                 PlayerState.player_id, PlayerState.player_name, PlayerState.current_elo
             )
             .where(
-                PlayerState.last_match_date >= one_year_ago
-            )  # Ensure your column name matches
+                PlayerState.last_match_date >= six_months_ago
+            ) 
             .order_by(desc(PlayerState.current_elo))
             .limit(100)
         )
         result = await session.execute(stmt)
         rows = result.all()
-        # return [{"name": p.name, "id": p.id, "elo": p.elo} for p in result.scalars().all()]
         return [
             {"id": p.player_id, "name": p.player_name, "elo": p.current_elo}
             for p in rows
@@ -43,24 +36,15 @@ class LLMService:
 
     async def get_raw_markets(self):
         api_key = self.odds_key.strip()
-        # 🎯 FIX: Remove the trailing slash after 'sports'
         base_url = "https://api.the-odds-api.com/v4/sports"
 
         async with httpx.AsyncClient() as client:
-            # print("🔍 Discovery: Finding active Tennis tournaments...")
-            # Use params= for the apiKey to ensure it's encoded correctly
-            sports_resp = await client.get(base_url, params={"apiKey": api_key})
 
+            # First we need to query all upcoming tournaments for all sports
+            sports_resp = await client.get(base_url, params={"apiKey": api_key})
             all_sports = sports_resp.json()
 
-            # 🔍 DEBUG: See what we actually got
-            if isinstance(all_sports, dict):
-                # print(
-                #     f"⚠️ API returned a Dictionary (likely Welcome message): {all_sports.get('message')}"
-                # )
-                return []
-
-            # 2. FILTER: Active Men's Singles Tennis
+            # We filter down to get the key (tournament name) for every upcoming atp tennis event
             active_keys = [
                 s["key"]
                 for s in all_sports
@@ -70,11 +54,10 @@ class LLMService:
                 and s.get("description") == "Men's Singles"
             ]
 
-            # print(active_keys)
 
-            # 3. LOOP: Get Odds for each active key
-            master_data = {"matches": []}
-            for sport_key in active_keys:
+            # Loop over the active keys/upcoming or ongoing tournaments to get Odds for each active key
+            master_data = {"matches": []} # Initialising the data structure
+            for sport_key in active_keys: # Loop over upcoming tournaments
                 odds_url = f"{base_url}/{sport_key}/odds/"
                 odds_params = {
                     "apiKey": api_key,
@@ -84,12 +67,11 @@ class LLMService:
                     "oddsFormat": "decimal",
                 }
 
-                # print(f"   -> Fetching odds for {sport_key}...")
                 odds_resp = await client.get(odds_url, params=odds_params)
-                raw_matches = odds_resp.json()
+                raw_matches = odds_resp.json() # Converts the response object into a dict
 
                 for match in raw_matches:
-                    # 1. Create the flat entry
+                    # First we create the template for each match, to be appended later into our master data dict
                     entry = {
                         "p1": match["home_team"],
                         "p2": match["away_team"],
@@ -103,9 +85,9 @@ class LLMService:
                         "bf_p2": None,
                     }
 
-                    # 2. Pluck the odds from the bookies we care about
+                    # Loop over every bookie in the match datais
                     for bookie in match.get("bookmakers", []):
-                        # Map key to our flat prefix
+                        # For every bookie, we check if it matches our three and then rename with the mapping dict
                         prefix = {
                             "bet365": "b365",
                             "pinnacle": "pin",
@@ -115,7 +97,7 @@ class LLMService:
                         if not prefix:
                             continue
 
-                        # Get the H2H market
+                        # We use an generator expression and the next function to loop each betting option until we hit h2h, or return none
                         h2h = next(
                             (m for m in bookie["markets"] if m["key"] == "h2h"), None
                         )
@@ -125,7 +107,7 @@ class LLMService:
                                 side = "p1" if outcome["name"] == entry["p1"] else "p2"
                                 entry[f"{prefix}_{side}"] = outcome["price"]
 
-                    # 3. Add to our master list
+                    # Add to our master list
                     master_data["matches"].append(entry)
 
             return master_data
@@ -185,20 +167,17 @@ class LLMService:
 
 """
 
-        # place_holder_matches = [{'p1_name': 'Ben Shelton', 'p1_id': 'S0S1', 'p2_name': 'Reilly Opelka', 'p2_id': 'O522', 'pin_p1': 1.42, 'pin_p2': 3.06, 'bf_p1': 2.28, 'bf_p2': 1.61, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-06T20:55:00Z'}, {'p1_name': 'Lorenzo Musetti', 'p1_id': 'M0EJ', 'p2_name': 'Marton Fucsovics', 'p2_id': 'F724', 'pin_p1': 1.67, 'pin_p2': 2.28, 'bf_p1': 1.52, 'bf_p2': 2.9, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-06T21:14:00Z'}, {'p1_name': 'Gael Monfils', 'p1_id': 'MC65', 'p2_name': 'Felix Auger-Aliassime', 'p2_id': 'AG37', 'pin_p1': 5.01, 'pin_p2': 1.21, 'bf_p1': 5.1, 'bf_p2': 1.24, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-06T22:00:00Z'}, {'p1_name': 'Jenson Brooksby', 'p1_id': 'B0CD', 'p2_name': 'Frances Tiafoe', 'p2_id': 'TD51', 'pin_p1': 1.96, 'pin_p2': 1.93, 'bf_p1': 1.97, 'bf_p2': 2.0, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-06T22:00:00Z'}, {'p1_name': 'Tomas Martin Etcheverry', 'p1_id': 'EA24', 'p2_name': 'Denis Shapovalov', 'p2_id': 'SU55', 'pin_p1': 2.65, 'pin_p2': 1.53, 'bf_p1': 2.72, 'bf_p2': 1.56, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-06T23:30:00Z'}, {'p1_name': 'Marcos Giron', 'p1_id': 'GC88', 'p2_name': 'Jakub Mensik', 'p2_id': 'M0NI', 'pin_p1': 3.27, 'pin_p2': 1.38, 'bf_p1': 3.5, 'bf_p2': 1.38, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T01:00:00Z'}, {'p1_name': 'Zizou Bergs', 'p1_id': 'BU13', 'p2_name': 'Tommy Paul', 'p2_id': 'PL56', 'pin_p1': 4.18, 'pin_p2': 1.27, 'bf_p1': 4.4, 'bf_p2': 1.27, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T03:30:00Z'}, {'p1_name': 'Daniil Medvedev', 'p1_id': 'MM58', 'p2_name': 'Alejandro Tabilo', 'p2_id': 'TE30', 'pin_p1': 1.26, 'pin_p2': 4.21, 'bf_p1': 1.27, 'bf_p2': 4.2, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Ugo Humbert', 'p1_id': 'HH26', 'p2_name': 'Alex Michelsen', 'p2_id': 'M0QI', 'pin_p1': 1.87, 'pin_p2': 2.0, 'bf_p1': 1.91, 'bf_p2': 2.02, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Sebastian Korda', 'p1_id': 'K0AH', 'p2_name': 'Alex de Minaur', 'p2_id': 'DH58', 'pin_p1': 2.39, 'pin_p2': 1.62, 'bf_p1': 2.4, 'bf_p2': 1.68, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Alexander Bublik', 'p1_id': 'BK92', 'p2_name': 'Vit Kopriva', 'p2_id': 'KI82', 'pin_p1': 1.28, 'pin_p2': 3.98, 'bf_p1': 1.29, 'bf_p2': 4.0, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Alexander Shevchenko', 'p1_id': 'S0H2', 'p2_name': 'Casper Ruud', 'p2_id': 'RH16', 'pin_p1': 4.82, 'pin_p2': 1.21, 'bf_p1': 4.8, 'bf_p2': 1.22, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Andrey Rublev', 'p1_id': 'RE44', 'p2_name': 'Gabriel Diallo', 'p2_id': 'D0F6', 'pin_p1': 1.4, 'pin_p2': 3.2, 'bf_p1': 1.4, 'bf_p2': 3.3, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Juan Manuel Cerundolo', 'p1_id': 'C0C8', 'p2_name': 'Arthur Rinderknech', 'p2_id': 'RC91', 'pin_p1': 2.79, 'pin_p2': 1.48, 'bf_p1': 2.82, 'bf_p2': 1.51, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Francisco Cerundolo', 'p1_id': 'C0AU', 'p2_name': 'Benjamin Bonzi', 'p2_id': 'BM95', 'pin_p1': 1.35, 'pin_p2': 3.42, 'bf_p1': 1.38, 'bf_p2': 3.4, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Carlos Alcaraz', 'p1_id': 'A0E2', 'p2_name': 'Grigor Dimitrov', 'p2_id': 'D875', 'pin_p1': 1.04, 'pin_p2': 16.02, 'bf_p1': 1.04, 'bf_p2': 21.0, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Roberto Bautista Agut', 'p1_id': 'BD06', 'p2_name': 'Jack Draper', 'p2_id': 'D0CO', 'pin_p1': 6.36, 'pin_p2': 1.14, 'bf_p1': 6.6, 'bf_p2': 1.15, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Sebastian Baez', 'p1_id': 'B0BI', 'p2_name': 'Jiri Lehecka', 'p2_id': 'L0BV', 'pin_p1': 3.32, 'pin_p2': 1.36, 'bf_p1': 3.35, 'bf_p2': 1.41, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Karen Khachanov', 'p1_id': 'KE29', 'p2_name': 'Joao Fonseca', 'p2_id': 'F0FV', 'pin_p1': 2.29, 'pin_p2': 1.69, 'bf_p1': 2.3, 'bf_p2': 1.73, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}, {'p1_name': 'Novak Djokovic', 'p1_id': 'D643', 'p2_name': 'Kamil Majchrzak', 'p2_id': 'MQ75', 'pin_p1': 1.1, 'pin_p2': 8.41, 'bf_p1': 1.12, 'bf_p2': 8.2, 'tournament': 'ATP Indian Wells', 'commence_time': '2026-03-07T19:00:00Z'}]
-
         response = self.model.generate_content(
             prompt.format(
-                elite_db=json.dumps(elite_100),
+                elite_db=json.dumps(elite_100), # json.dumps converts python dict into a json string
                 matches_and_markets=json.dumps(match_data),
             ),
             generation_config={"response_mime_type": "application/json"},
         )
 
         try:
-            # 3. Parse and return the structured data
+            # Parse and return the structured data
             data = json.loads(response.text)
-            # print(data.get("featured_matches", []))
             return data.get("featured_matches", [])
         except Exception as e:
             print(f"❌ Gemini Parsing Error: {e}")

@@ -1,5 +1,5 @@
 import pandas as pd
-pd.set_option('future.no_silent_downcasting', True)
+pd.set_option('future.no_silent_downcasting', True) # Prevents warning messages
 
 import torch
 import numpy as np
@@ -16,17 +16,15 @@ EXPECTED_FEATURES = [
 
 class FeatureAssembler:
     def __init__(self):
-        # 1. Load the Artifacts
-        self.scaler = joblib.load('app/ml/models/scaler.pkl')
+        # Load the Artifacts
+        self.scaler = joblib.load('app/ml/models/scaler.pkl') # We load in the scalar since its fitted to the whole dataset
         self.player_le = joblib.load('app/ml/models/player_encoder.pkl')
         self.surface_le = joblib.load('app/ml/models/surface_encoder.pkl')
         
-        # 2. Initialize and Load the Encoder
-        # Use the same input_dim from your training (likely 24)
         self.encoder = TennisEncoder(
             num_players=len(self.player_le.classes_),
             num_surfaces=len(self.surface_le.classes_),
-            input_dim=26 
+            input_dim=24 
         )
         self.encoder.load_state_dict(torch.load('app/ml/models/tennis_encoder.pt'))
         self.encoder.eval()
@@ -89,7 +87,6 @@ class FeatureAssembler:
         scaled_stats = self.scaler.transform(stats_df)
 
       
-        
         with torch.no_grad():
             p1_emb = self.encoder.player_embed(p1_idx).numpy()
             p2_emb = self.encoder.player_embed(p2_idx).numpy()

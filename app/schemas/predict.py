@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional,Any
 
 class ManualPredictRequest(BaseModel):
-    p1_id: str = Field(..., example="A0E2")
+    p1_id: str = Field(..., example="A0E2") # We use field because its stricter and more comprehensive that just str or Optional(str)
     p2_id: str = Field(..., example="AG37")
     surface: str = Field(..., example="Hard")
 

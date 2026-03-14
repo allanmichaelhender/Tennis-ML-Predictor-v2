@@ -17,7 +17,8 @@ def train_encoder():
     surf_idx = torch.tensor(df['surface_idx'].values, dtype=torch.long)
     
     # Continuous Features
-    cont_cols = [c for c in df.columns if c.startswith(('p1_', 'p2_')) and not c.endswith('_idx')]
+    cont_cols = [c for c in df.columns if c.startswith(('p1_', 'p2_')) and not c.endswith('_id') and not c.endswith('_idx')]
+
     
     # Converting to floats and dealing with nulls, coerce fills unknowns with Nan and those get 0'd
     for col in cont_cols:
@@ -27,6 +28,7 @@ def train_encoder():
     performance_stats = torch.tensor(df[cont_cols].values, dtype=torch.float32)
 
     input_dim = performance_stats.shape[1] # Number of input features
+    print(input_dim)
     
     # Target setup, unsqueeze turns it into a column to match dimensions
     target = torch.tensor(df['target'].values, dtype=torch.float32).unsqueeze(1)

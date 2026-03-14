@@ -9,17 +9,12 @@ from datetime import date
 async def ingest_players_csv(file_path: str):
     # 1. Use 'chunksize' to read the file in batches
 
-    def clean_int(val, column_type=None):
+    def clean_int(val):
         if pd.isna(val) or val is None or str(val).strip() == "":
             return None
         try:
-            # 1. Force to int
+            # Force to int
             num = int(float(val))
-
-            # 2. SANITY CHECK: If this is Weight/Height, it shouldn't be 8 digits long
-            if column_type in ["weight", "height"]:
-                if num > 1000:  # No player is 1000cm tall or 1000kg
-                    return None
 
             return num
         except (ValueError, TypeError):
@@ -29,9 +24,9 @@ async def ingest_players_csv(file_path: str):
         if pd.isna(val) or val is None or str(val).strip() == "":
             return None
         try:
-            # 1. Force to string and remove decimals (handles 19860801.0)
+            # Force to string and remove decimals (handles 19860801.0)
             d_str = str(int(float(val)))
-            # 2. Slice YYYY-MM-DD
+            # Slice YYYY-MM-DD
             if len(d_str) == 8:
                 return date(int(d_str[:4]), int(d_str[4:6]), int(d_str[6:8]))
             return None
@@ -40,7 +35,7 @@ async def ingest_players_csv(file_path: str):
 
     df = pd.read_csv(file_path)
 
-    # 2. THE CLEANSE (Vectorized - happens to the whole file)
+    # THE CLEANSE (Vectorized - happens to the whole file)
     df["id"] = df["id"].astype(str).str.strip()
     df["player"] = df["player"].astype(str).str.strip()
 
@@ -49,7 +44,7 @@ async def ingest_players_csv(file_path: str):
     df = df.drop_duplicates(subset=["id"], keep="first")
 
     print(
-        f"⚠️ Removed {initial_count - len(df)} duplicates. {len(df)} unique players remain."
+        f"Removed {initial_count - len(df)} duplicates. {len(df)} unique players remain."
     )
 
     # 3. Global NaN to None
@@ -70,15 +65,15 @@ async def ingest_players_csv(file_path: str):
                     "birthdate": parse_atp_date(row.get("birthdate")),
                     "atpname": str(row.get("atpname")) if row.get("atpname") else None,
                     "hand": str(row["hand"]).upper() if row.get("hand") else "U",
-                    "height": clean_int(row.get("height"), "height"),
-                    "weight": clean_int(row.get("weight"), "weight"),
+                    "height": clean_int(row.get("height")),
+                    "weight": clean_int(row.get("weight")),
                     "ioc": str(row["ioc"])[:3].upper() if row.get("ioc") else None,
                     "backhand": str(row.get("backhand", "Unknown")),
                 }
                 for _, row in chunk.iterrows()
             ]
 
-            # 5. Bulk Upsert the clean chunk
+           # Bulk Upsert the clean chunk
             stmt = insert(Player).values(players_data)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["id"],

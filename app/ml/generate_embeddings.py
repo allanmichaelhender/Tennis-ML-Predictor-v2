@@ -14,7 +14,8 @@ def generate_final_dataset():
     num_surfaces = len(surface_le.classes_)
     
     # Extracting the continuous columns and input dimemsion
-    cont_cols = [c for c in df.columns if c.startswith(('p1_', 'p2_')) and not c.endswith('_idx')]
+    cont_cols = [c for c in df.columns if c.startswith(('p1_', 'p2_')) and not c.endswith('_id') and not c.endswith('_idx')]
+
     input_dim = len(cont_cols)
     
     # Initialising the model

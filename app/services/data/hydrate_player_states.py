@@ -9,7 +9,6 @@ class StateHydrator:
         self.surfaces = ["Hard", "Clay", "Grass"]
 
     async def run_master_pluck(self, session):
-        print("📊 Phase 1: Plucking Global Stats & Identity...")
         query = text("""
     INSERT INTO player_states (
         player_id, player_name, current_elo, last_match_date,
@@ -51,7 +50,6 @@ class StateHydrator:
             rolling_bp_save_pct = EXCLUDED.rolling_bp_save_pct,
             rolling_return_won_pct = EXCLUDED.rolling_return_won_pct;
     """)
-
         await session.execute(query)
         await session.commit()
 
@@ -62,15 +60,13 @@ class StateHydrator:
             column_name = f"current_{surf.lower()}_elo"
             date_column = f"last_{surf.lower()}_match_date"
 
-            # 1. THE "BLANKET": Set every single row to 1500 first
+            # 1Set every single row to 1500 first
             # This ensures NO nulls exist before we even look at the matches
-            print(f"   -> Setting all {column_name} to 1500.0...")
             await session.execute(
                 text(f"UPDATE player_states SET {column_name} = 1500.0")
             )
 
-            # 2. THE "PAINT": Update only those who HAVE match history on this surface
-            print(f"   -> Plucking real {surf} data from history...")
+            # Updating surface elo and dates
             query = text(f"""
                 WITH surf_latest AS (
                     SELECT p_id, s_elo, m_date
@@ -96,7 +92,7 @@ class StateHydrator:
             await session.commit()
 
     async def run_fatigue_calc(self, session):
-        # 1. Calculate the dynamic 14-day window
+        # Calculate the dynamic 14-day window
         today = datetime.now()
         fourteen_days_ago = today - timedelta(days=14)
 
@@ -104,7 +100,7 @@ class StateHydrator:
             f"🔋 Phase 3: Calculating Rolling Fatigue (Since {fourteen_days_ago.date()})"
         )
 
-        # 2. Use Bind Parameters (:window_start) instead of f-strings for SQL safety
+        # we Use Bind Parameters (:window_start) instead of f-strings for SQL safety
         query = text("""
         WITH player_mins AS (
             SELECT p_id, SUM(minutes) as total_mins
