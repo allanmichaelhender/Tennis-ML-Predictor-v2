@@ -29,11 +29,9 @@ async def run_pipeline():
         print("3/5: Ingesting Odds...")
         await ingest_odds(configs)
         
-        print("4/5: Running Feature Engine (XGBoost Prep)...")
+        print("4/5: Running Feature Engine (XGBoost Prep) and Hyrdrating Player States")
         await run_features()
-        
-        print("5/5: Hydrating Player States (The Master Pluck)...")
-        await hydrator.execute_all()
+ 
         
         print("✅ PIPELINE COMPLETE: Database is fully hydrated.")
     except Exception as e:
