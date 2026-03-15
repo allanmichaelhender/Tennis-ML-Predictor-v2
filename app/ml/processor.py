@@ -103,8 +103,16 @@ class TennisDataProcessor:
         combined_df = pd.concat([df_1, df_0], axis=0).reset_index(drop=True)
         combined_df = combined_df.fillna(0)
 
+        db_url = os.getenv("DATABASE_URL").replace("asyncpg", "psycopg2") # We swap to psycopg2 because we are using syncronous
+        
+        # Creating a syncronous engine
+        sync_engine = create_engine(db_url)
+
+        all_possible_players = pd.read_sql("SELECT winner_id, loser_id FROM matches", sync_engine)
+        all_ids = pd.unique(all_possible_players[['winner_id', 'loser_id']].values.ravel()) # Ravel unravels the 2d array into a single list
+
         # Label Encoding Categorical features
-        all_ids = pd.concat([df['winner_id'], df['loser_id']]).unique()
+        # all_ids = pd.concat([df['winner_id'], df['loser_id']]).unique()
         self.player_encoder.fit(all_ids)
         
         combined_df['p1_id_idx'] = self.player_encoder.transform(combined_df['p1_id'])

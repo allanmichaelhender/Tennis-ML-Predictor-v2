@@ -13,11 +13,11 @@ def train_encoder():
 
     df['tourney_date'] = pd.to_datetime(df['tourney_date'])
     df = df[
-    #(df['tourney_date'] >= '2023-01-01') & 
-    (df['tourney_date'] < '2025-01-01')
+    (df['tourney_date'] >= '2010-01-01') & 
+    (df['tourney_date'] < '2015-01-01')
 ].copy()
     
-    print(f"📅 Training NN Encoder on matches BEFORE 2025. Rows: {len(df)}")
+    print(f"📅 Training NN Encoder on matches BEFORE 2015. Rows: {len(df)}")
     
     # Categorical Indexes
     p1_idx = torch.tensor(df['p1_id_idx'].values, dtype=torch.long)
