@@ -97,6 +97,10 @@ class Match(Base):
     w_tournament_fatigue: Mapped[int | None] = mapped_column(Integer)
     l_tournament_fatigue: Mapped[int | None] = mapped_column(Integer)
 
+    # Matches Played (not including current game)
+    w_matches_played: Mapped[int | None] = mapped_column(Integer)
+    l_matches_played: Mapped[int | None] = mapped_column(Integer)
+
     # Betting Odds (Closing Market)
     b365_w: Mapped[float | None] = mapped_column(Float)
     b365_l: Mapped[float | None] = mapped_column(Float)

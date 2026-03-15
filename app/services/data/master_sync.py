@@ -5,7 +5,6 @@ from app.services.data.match_ingestion import main as ingest_matches
 from app.services.data.player_ingestion import ingest_players_csv as ingest_players
 from app.services.data.odds_ingestor import ingest_bulk_odds as ingest_odds
 from app.services.ml.feature_engine import run_feature_engine as run_features
-from app.services.data.hydrate_player_states import hydrator
 
 
 

@@ -17,11 +17,12 @@ class PlayerHistory:
         self.recent_performance = []
         self.recent_matches = []
         self.name = name
+        self.matches_played = 0
 
     def get_snapshots(self, current_date, surface):
         # Calculating recent form (last 10 matches)
         if not self.recent_performance:
-            m_win_pct, g_win_pct = 0.5, 0.50
+            m_win_pct, g_win_pct = 0, 0
         else:
             m_win_pct = sum(x[0] for x in self.recent_performance) / len(
                 self.recent_performance
@@ -65,6 +66,8 @@ class PlayerHistory:
         sv_won = safe_division(tot_sv_won, tot_svpt, 0.60)
         df_pp = safe_division(tot_df, tot_svpt, 0.03)
 
+        matches_played = self.matches_played
+
         return (
             m_win_pct,
             g_win_pct,
@@ -75,6 +78,7 @@ class PlayerHistory:
             fatigue,
             sv_won,
             df_pp,
+            matches_played
         )
 
 
@@ -111,11 +115,13 @@ async def run_feature_engine():
                 else m.tourney_date
             )
 
+           
+
             # Getting snapshots before game is played
-            w_m_win, w_g_win, w_off, w_s_off, w_ace, w_bp, w_fat, w_sv_won, w_df_pp = (
+            w_m_win, w_g_win, w_off, w_s_off, w_ace, w_bp, w_fat, w_sv_won, w_df_pp, w_matches_played = (
                 w.get_snapshots(m_date, m.surface)
             )
-            l_m_win, l_g_win, l_off, l_s_off, l_ace, l_bp, l_fat, l_sv_won, l_df_pp = (
+            l_m_win, l_g_win, l_off, l_s_off, l_ace, l_bp, l_fat, l_sv_won, l_df_pp, l_matches_played = (
                 l.get_snapshots(m_date, m.surface)
             )
 
@@ -146,6 +152,9 @@ async def run_feature_engine():
                     "l_rolling_ace_per_game": l_ace,
                     "l_rolling_bp_save_pct": l_bp,
                     "l_tournament_fatigue": l_fat,
+                    "w_matches_played": w_matches_played,
+                    "l_matches_played": l_matches_played
+
                 }
             )
 
@@ -180,7 +189,8 @@ async def run_feature_engine():
                     "bp_s": m.w_bpSaved or 0,
                     "bp_f": m.w_bpFaced or 0,
                     "sv_won": (m.w_1stWon or 0) + (m.w_2ndWon or 0),
-                    'surface': m.surface
+                    'surface': m.surface,
+                    'matches_played': m.w_matches_played or 0
                 }
             )
             # Loser Data
@@ -195,9 +205,14 @@ async def run_feature_engine():
                     "bp_s": m.l_bpSaved or 0,
                     "bp_f": m.l_bpFaced or 0,
                     "sv_won": (m.l_1stWon or 0) + (m.l_2ndWon or 0),
-                    'surface': m.surface
+                    'surface': m.surface,
+                    'matches_played': m.l_matches_played or 0
                 }
             )
+
+            # Adding 1 to matches played for winner and loser, we add after appending recent matches since those are historical figures
+            w.matches_played += 1
+            l.matches_played += 1
 
             # Trim to keep calculations current
             w.recent_performance, l.recent_performance = (
